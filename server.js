@@ -50,8 +50,8 @@ app.post('/process', upload.single('video'), async (req, res) => {
 
   const tmpDir = os.tmpdir();
   const cleanPath = path.join(tmpDir, `clean_${Date.now()}.mp4`);
-  const finalPath = path.join(tmpDir, `final_${Date.now()}.mp4`);
-  const outputName = (filename || 'output').replace(/[^a-zA-Z0-9_\-]/g, '_') + '.mp4';
+  const finalPath = path.join(tmpDir, `final_${Date.now()}.mov`);
+  const outputName = (filename || 'output').replace(/[^a-zA-Z0-9_\-]/g, '_') + '.mov';
 
   try {
     // Step 1: Strip all metadata with FFmpeg
@@ -88,10 +88,10 @@ app.post('/process', upload.single('video'), async (req, res) => {
 
     await exiftool.write(cleanPath, tags, ['-overwrite_original']);
 
-    // Step 3: Rewrite container with FFmpeg (clean brand + no encoder signature)
+    // Step 3: Rewrite container as QuickTime MOV (forces Major Brand = qt)
     await runCmd(
       `ffmpeg -y -i "${cleanPath}" -c copy \
-        -movflags use_metadata_tags \
+        -movflags use_metadata_tags+faststart \
         -fflags +bitexact \
         -map_metadata 0 \
         -metadata make="Apple" \
@@ -99,12 +99,12 @@ app.post('/process', upload.single('video'), async (req, res) => {
         -metadata software="${profile.software}" \
         -metadata creation_time="${creationDate}" \
         -metadata encoder="" \
-        -brand qt \
+        -f mov \
         "${finalPath}"`
     );
 
     res.setHeader('Content-Disposition', `attachment; filename="${outputName}"`);
-    res.setHeader('Content-Type', 'video/mp4');
+    res.setHeader('Content-Type', 'video/quicktime');
     const stream = fs.createReadStream(finalPath);
     stream.pipe(res);
     stream.on('end', () => cleanup(inputPath, cleanPath, finalPath));
