@@ -149,9 +149,22 @@
   <div>
     <div class="section-label">iPhone Model</div>
     <select id="iphoneModel">
+      <option value="iPhone 17 Pro">iPhone 17 Pro &mdash; iOS 18.4.1</option>
       <option value="iPhone 15 Pro">iPhone 15 Pro &mdash; iOS 17.4.1</option>
       <option value="iPhone 14 Pro">iPhone 14 Pro &mdash; iOS 17.4.1</option>
       <option value="iPhone 12 Pro Max">iPhone 12 Pro Max &mdash; iOS 16.7.2</option>
+    </select>
+  </div>
+
+  <hr class="divider">
+
+  <div>
+    <div class="section-label">Output Format</div>
+    <select id="outputFormat">
+      <option value="mp4">MP4 (.mp4) &mdash; most compatible</option>
+      <option value="mov">QuickTime (.mov) &mdash; native iPhone format</option>
+      <option value="h264">H.264 (.h264) &mdash; raw video stream</option>
+      <option value="avi">AVI (.avi) &mdash; legacy format</option>
     </select>
   </div>
 
@@ -196,7 +209,7 @@
   <div>
     <div class="section-label">Output Filename</div>
     <input type="text" id="outputFilename" placeholder="e.g. IMG_0472" maxlength="80">
-    <div class="input-hint">No spaces or special chars &mdash; .mp4 added automatically</div>
+    <div class="input-hint">No spaces or special chars &mdash; extension added automatically</div>
   </div>
 
   <hr class="divider">
@@ -290,9 +303,14 @@
     document.getElementById('successBox').classList.remove('show');
     document.getElementById('submitBtn').disabled = true;
 
+    const format = document.getElementById('outputFormat').value;
+    const extMap = { mp4: '.mp4', mov: '.mov', h264: '.h264', avi: '.avi' };
+    const ext = extMap[format] || '.mp4';
+
     const form = new FormData();
     form.append('video', file);
     form.append('model', document.getElementById('iphoneModel').value);
+    form.append('format', format);
     form.append('lat', document.getElementById('lat').value);
     form.append('lon', document.getElementById('lon').value);
     form.append('alt', document.getElementById('alt').value);
@@ -313,7 +331,7 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = (document.getElementById('outputFilename').value || 'tagged_video').replace(/[^a-zA-Z0-9_\-]/g,'_') + '.mp4';
+      a.download = (document.getElementById('outputFilename').value || 'tagged_video').replace(/[^a-zA-Z0-9_\-]/g,'_') + ext;
       a.click();
       URL.revokeObjectURL(url);
       document.getElementById('successBox').classList.add('show');
