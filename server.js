@@ -19,7 +19,15 @@ app.use(express.static(path.join(__dirname, 'public')));
 const IPHONE_PROFILES = {
   'iPhone 12 Pro Max': { model: 'iPhone 12 Pro Max', software: '16.7.2' },
   'iPhone 14 Pro':     { model: 'iPhone 14 Pro',     software: '17.4.1' },
-  'iPhone 15 Pro':     { model: 'iPhone 15 Pro',     software: '17.4.1' }
+  'iPhone 15 Pro':     { model: 'iPhone 15 Pro',     software: '17.4.1' },
+  'iPhone 17 Pro':     { model: 'iPhone 17 Pro',     software: '18.4.1' }
+};
+
+const FORMAT_MAP = {
+  'mp4':  { ffFormat: 'mp4',  mime: 'video/mp4',       ext: '.mp4'  },
+  'mov':  { ffFormat: 'mov',  mime: 'video/quicktime',  ext: '.mov'  },
+  'h264': { ffFormat: 'h264', mime: 'video/x-h264',     ext: '.h264' },
+  'avi':  { ffFormat: 'avi',  mime: 'video/x-msvideo',  ext: '.avi'  },
 };
 
 function runCmd(cmd) {
@@ -41,25 +49,26 @@ app.post('/process', upload.single('video'), async (req, res) => {
   const inputPath = req.file?.path;
   if (!inputPath) return res.status(400).json({ error: 'No video uploaded.' });
 
-  const { model, lat, lon, alt, filename, date } = req.body;
+  const { model, lat, lon, alt, filename, date, format } = req.body;
   const profile = IPHONE_PROFILES[model];
   if (!profile) {
     cleanup(inputPath);
     return res.status(400).json({ error: 'Invalid iPhone model.' });
   }
 
+  const fmt = FORMAT_MAP[format] || FORMAT_MAP['mp4'];
   const tmpDir = os.tmpdir();
   const cleanPath = path.join(tmpDir, `clean_${Date.now()}.mp4`);
-  const finalPath = path.join(tmpDir, `final_${Date.now()}.mov`);
-  const outputName = (filename || 'output').replace(/[^a-zA-Z0-9_\-]/g, '_') + '.mov';
+  const finalPath = path.join(tmpDir, `final_${Date.now()}${fmt.ext}`);
+  const outputName = (filename || 'output').replace(/[^a-zA-Z0-9_\-]/g, '_') + fmt.ext;
 
   try {
-    // Step 1: Strip all metadata with FFmpeg
+    // Step 1: Strip all metadata
     await runCmd(
       `ffmpeg -y -i "${inputPath}" -map_metadata -1 -map_metadata:s:v -1 -map_metadata:s:a -1 -c copy "${cleanPath}"`
     );
 
-    // Step 2: Write Apple QuickTime keys with exiftool-vendored
+    // Step 2: Write Apple QuickTime keys
     const creationDate = date
       ? new Date(date.replace(' ', 'T')).toISOString()
       : new Date().toISOString();
@@ -88,7 +97,7 @@ app.post('/process', upload.single('video'), async (req, res) => {
 
     await exiftool.write(cleanPath, tags, ['-overwrite_original']);
 
-    // Step 3: Rewrite container as QuickTime MOV (forces Major Brand = qt)
+    // Step 3: Rewrite container in chosen format
     await runCmd(
       `ffmpeg -y -i "${cleanPath}" -c copy \
         -movflags use_metadata_tags+faststart \
@@ -99,12 +108,12 @@ app.post('/process', upload.single('video'), async (req, res) => {
         -metadata software="${profile.software}" \
         -metadata creation_time="${creationDate}" \
         -metadata encoder="" \
-        -f mov \
+        -f ${fmt.ffFormat} \
         "${finalPath}"`
     );
 
     res.setHeader('Content-Disposition', `attachment; filename="${outputName}"`);
-    res.setHeader('Content-Type', 'video/quicktime');
+    res.setHeader('Content-Type', fmt.mime);
     const stream = fs.createReadStream(finalPath);
     stream.pipe(res);
     stream.on('end', () => cleanup(inputPath, cleanPath, finalPath));
