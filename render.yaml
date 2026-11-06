@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: iphone-meta-tagger
+    env: node
+    plan: free
+    buildCommand: |
+      apt-get update && apt-get install -y ffmpeg libimage-exiftool-perl && npm install
+    startCommand: node server.js
+    envVars:
+      - key: PORT
+        value: 3000
+    disk:
+      name: tmp-storage
+      mountPath: /tmp
+      sizeGB: 1
