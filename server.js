@@ -88,14 +88,18 @@ app.post('/process', upload.single('video'), async (req, res) => {
 
     await exiftool.write(cleanPath, tags, ['-overwrite_original']);
 
-    // Step 3: Rewrite container with FFmpeg
+    // Step 3: Rewrite container with FFmpeg (clean brand + no encoder signature)
     await runCmd(
       `ffmpeg -y -i "${cleanPath}" -c copy \
         -movflags use_metadata_tags \
+        -fflags +bitexact \
+        -map_metadata 0 \
         -metadata make="Apple" \
         -metadata model="${profile.model}" \
         -metadata software="${profile.software}" \
         -metadata creation_time="${creationDate}" \
+        -metadata encoder="" \
+        -brand qt \
         "${finalPath}"`
     );
 
