@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>iPhone Meta Tagger</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    min-height: 100vh;
+    background: #0a0a0f;
+    color: #e8e8f0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 16px 60px;
+  }
+  .logo { font-size: 13px; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase; color: #666; margin-bottom: 10px; }
+  h1 {
+    font-size: clamp(24px, 5vw, 36px);
+    font-weight: 700;
+    background: linear-gradient(135deg, #fff 0%, #a0a8ff 60%, #6e78ff 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    text-align: center;
+    margin-bottom: 8px;
+  }
+  .subtitle { color: #666; font-size: 14px; margin-bottom: 48px; text-align: center; }
+  .card {
+    background: #12121a;
+    border: 1px solid #1e1e2e;
+    border-radius: 20px;
+    padding: 32px;
+    width: 100%;
+    max-width: 540px;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+  }
+  .drop-zone {
+    border: 2px dashed #2a2a3e;
+    border-radius: 14px;
+    padding: 40px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+  }
+  .drop-zone:hover, .drop-zone.drag-over { border-color: #6e78ff; background: rgba(110,120,255,0.05); }
+  .drop-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .drop-icon { font-size: 36px; margin-bottom: 10px; }
+  .drop-zone p { color: #888; font-size: 14px; line-height: 1.6; }
+  .drop-zone p strong { color: #aab; display: block; margin-bottom: 4px; font-size: 15px; }
+  .file-chosen { color: #6e78ff !important; font-weight: 600; font-size: 13px !important; margin-top: 8px; }
+  .section-label { font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #555; margin-bottom: 10px; }
+  select {
+    width: 100%;
+    padding: 12px 16px;
+    background: #0d0d16;
+    border: 1px solid #232336;
+    border-radius: 10px;
+    color: #e8e8f0;
+    font-size: 15px;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23555' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    cursor: pointer;
+  }
+  select:focus { outline: none; border-color: #6e78ff; }
+  .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .input-row.three { grid-template-columns: 1fr 1fr 1fr; }
+  input[type="text"], input[type="number"], input[type="datetime-local"] {
+    width: 100%;
+    padding: 12px 14px;
+    background: #0d0d16;
+    border: 1px solid #232336;
+    border-radius: 10px;
+    color: #e8e8f0;
+    font-size: 14px;
+    transition: border-color 0.2s;
+  }
+  input:focus { outline: none; border-color: #6e78ff; }
+  input::placeholder { color: #3a3a55; }
+  .input-hint { font-size: 11px; color: #444; margin-top: 6px; }
+  .gps-label { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .gps-presets { display: flex; gap: 6px; flex-wrap: wrap; }
+  .preset-btn {
+    padding: 4px 10px;
+    border: 1px solid #252538;
+    border-radius: 20px;
+    background: transparent;
+    color: #666;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .preset-btn:hover { border-color: #6e78ff; color: #9099ff; }
+  .submit-btn {
+    padding: 16px;
+    background: linear-gradient(135deg, #5a64ef, #7e45e8);
+    border: none;
+    border-radius: 12px;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .submit-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(110,80,232,0.4); }
+  .submit-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .progress-wrap { display: none; flex-direction: column; gap: 10px; }
+  .progress-wrap.show { display: flex; }
+  .progress-bar-bg { height: 4px; background: #1a1a28; border-radius: 4px; overflow: hidden; }
+  .progress-bar { height: 100%; background: linear-gradient(90deg, #5a64ef, #7e45e8); border-radius: 4px; width: 0%; transition: width 0.4s ease; }
+  .progress-steps { display: flex; flex-direction: column; gap: 6px; }
+  .step { font-size: 12px; color: #444; }
+  .step.active { color: #9099ff; }
+  .step.done { color: #4caf80; }
+  .error-box { background: rgba(255,80,80,0.1); border: 1px solid rgba(255,80,80,0.25); border-radius: 10px; padding: 12px 16px; font-size: 13px; color: #ff8080; display: none; }
+  .error-box.show { display: block; }
+  .success-box { background: rgba(76,175,128,0.1); border: 1px solid rgba(76,175,128,0.25); border-radius: 10px; padding: 14px 16px; font-size: 13px; color: #4caf80; display: none; text-align: center; }
+  .success-box.show { display: block; }
+  .divider { border: none; border-top: 1px solid #1a1a28; }
+</style>
+</head>
+<body>
+
+<div class="logo">Video Tools</div>
+<h1>iPhone Meta Tagger</h1>
+<p class="subtitle">Strip & replace video metadata to match any iPhone model</p>
+
+<div class="card">
+
+  <div>
+    <div class="section-label">Video File</div>
+    <div class="drop-zone" id="dropZone">
+      <input type="file" id="videoFile" accept="video/*">
+      <div class="drop-icon">&#127916;</div>
+      <p><strong>Drop your video here</strong>or click to browse</p>
+      <p class="file-chosen" id="fileChosen" style="display:none"></p>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <div>
+    <div class="section-label">iPhone Model</div>
+    <select id="iphoneModel">
+      <option value="iPhone 15 Pro">iPhone 15 Pro &mdash; iOS 17.4.1</option>
+      <option value="iPhone 14 Pro">iPhone 14 Pro &mdash; iOS 17.4.1</option>
+      <option value="iPhone 12 Pro Max">iPhone 12 Pro Max &mdash; iOS 16.7.2</option>
+    </select>
+  </div>
+
+  <hr class="divider">
+
+  <div>
+    <div class="gps-label">
+      <span class="section-label" style="margin:0">GPS Coordinates <span style="color:#333;font-weight:400">(optional)</span></span>
+      <div class="gps-presets">
+        <button class="preset-btn" onclick="setGPS(40.7128,-74.0060,10)">New York</button>
+        <button class="preset-btn" onclick="setGPS(40.6950,-73.9857,8)">Brooklyn</button>
+        <button class="preset-btn" onclick="setGPS(34.0522,-118.2437,71)">LA</button>
+        <button class="preset-btn" onclick="setGPS(51.5074,-0.1278,11)">London</button>
+      </div>
+    </div>
+    <div class="input-row three">
+      <div>
+        <input type="number" id="lat" placeholder="Latitude" step="any" min="-90" max="90">
+        <div class="input-hint">e.g. 40.7128</div>
+      </div>
+      <div>
+        <input type="number" id="lon" placeholder="Longitude" step="any" min="-180" max="180">
+        <div class="input-hint">e.g. -74.0060</div>
+      </div>
+      <div>
+        <input type="number" id="alt" placeholder="Alt (m)" step="any">
+        <div class="input-hint">e.g. 10</div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <div>
+    <div class="section-label">Recording Date &amp; Time</div>
+    <input type="datetime-local" id="recordDate">
+    <div class="input-hint">Leave blank to use today's date</div>
+  </div>
+
+  <hr class="divider">
+
+  <div>
+    <div class="section-label">Output Filename</div>
+    <input type="text" id="outputFilename" placeholder="e.g. IMG_0472" maxlength="80">
+    <div class="input-hint">No spaces or special chars &mdash; .mp4 added automatically</div>
+  </div>
+
+  <hr class="divider">
+
+  <div class="error-box" id="errorBox"></div>
+
+  <div class="progress-wrap" id="progressWrap">
+    <div class="progress-bar-bg"><div class="progress-bar" id="progressBar"></div></div>
+    <div class="progress-steps">
+      <div class="step" id="step1">&#9679; Stripping original metadata</div>
+      <div class="step" id="step2">&#9679; Writing Apple QuickTime keys</div>
+      <div class="step" id="step3">&#9679; Rebuilding video container</div>
+      <div class="step" id="step4">&#9679; Preparing download</div>
+    </div>
+  </div>
+
+  <div class="success-box" id="successBox">&#10003; Done! Your tagged video downloaded automatically.</div>
+
+  <button class="submit-btn" id="submitBtn" onclick="processVideo()">Tag Video &rarr;</button>
+
+</div>
+
+<script>
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('videoFile');
+  const fileChosen = document.getElementById('fileChosen');
+
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files[0]) {
+      fileChosen.style.display = 'block';
+      fileChosen.textContent = fileInput.files[0].name;
+    }
+  });
+
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const f = e.dataTransfer.files[0];
+    if (f) {
+      const dt = new DataTransfer();
+      dt.items.add(f);
+      fileInput.files = dt.files;
+      fileChosen.style.display = 'block';
+      fileChosen.textContent = f.name;
+    }
+  });
+
+  function setGPS(lat, lon, alt) {
+    document.getElementById('lat').value = lat;
+    document.getElementById('lon').value = lon;
+    document.getElementById('alt').value = alt;
+  }
+
+  const stepIds = ['step1','step2','step3','step4'];
+  const stepPct = [20, 50, 80, 100];
+  let stepTimer;
+
+  function startProgress() {
+    let i = 0;
+    document.getElementById('progressWrap').classList.add('show');
+    document.getElementById('progressBar').style.width = '5%';
+    stepTimer = setInterval(() => {
+      if (i < stepIds.length) {
+        if (i > 0) {
+          document.getElementById(stepIds[i-1]).classList.remove('active');
+          document.getElementById(stepIds[i-1]).classList.add('done');
+        }
+        document.getElementById(stepIds[i]).classList.add('active');
+        document.getElementById('progressBar').style.width = stepPct[i] + '%';
+        i++;
+      }
+    }, 1800);
+  }
+
+  function stopProgress(success) {
+    clearInterval(stepTimer);
+    stepIds.forEach(s => {
+      document.getElementById(s).classList.remove('active');
+      if (success) document.getElementById(s).classList.add('done');
+    });
+    document.getElementById('progressBar').style.width = '100%';
+  }
+
+  async function processVideo() {
+    const file = fileInput.files[0];
+    if (!file) { showError('Please select a video file first.'); return; }
+
+    hideError();
+    document.getElementById('successBox').classList.remove('show');
+    document.getElementById('submitBtn').disabled = true;
+
+    const form = new FormData();
+    form.append('video', file);
+    form.append('model', document.getElementById('iphoneModel').value);
+    form.append('lat', document.getElementById('lat').value);
+    form.append('lon', document.getElementById('lon').value);
+    form.append('alt', document.getElementById('alt').value);
+    form.append('filename', document.getElementById('outputFilename').value || 'tagged_video');
+    const dateRaw = document.getElementById('recordDate').value;
+    form.append('date', dateRaw ? dateRaw.replace('T',' ') : '');
+
+    startProgress();
+
+    try {
+      const res = await fetch('/process', { method: 'POST', body: form });
+      stopProgress(res.ok);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Server error' }));
+        throw new Error(err.error || 'Processing failed');
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = (document.getElementById('outputFilename').value || 'tagged_video').replace(/[^a-zA-Z0-9_\-]/g,'_') + '.mp4';
+      a.click();
+      URL.revokeObjectURL(url);
+      document.getElementById('successBox').classList.add('show');
+    } catch(e) {
+      stopProgress(false);
+      showError(e.message);
+    } finally {
+      document.getElementById('submitBtn').disabled = false;
+    }
+  }
+
+  function showError(msg) {
+    const b = document.getElementById('errorBox');
+    b.textContent = msg;
+    b.classList.add('show');
+  }
+  function hideError() {
+    document.getElementById('errorBox').classList.remove('show');
+  }
+</script>
+</body>
+</html>
