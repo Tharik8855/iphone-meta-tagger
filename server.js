@@ -1,6 +1,7 @@
 const express = require('express');
 const multer = require('multer');
 const { exec } = require('child_process');
+const { exiftool } = require('exiftool-vendored');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -53,39 +54,41 @@ app.post('/process', upload.single('video'), async (req, res) => {
   const outputName = (filename || 'output').replace(/[^a-zA-Z0-9_\-]/g, '_') + '.mp4';
 
   try {
+    // Step 1: Strip all metadata with FFmpeg
     await runCmd(
       `ffmpeg -y -i "${inputPath}" -map_metadata -1 -map_metadata:s:v -1 -map_metadata:s:a -1 -c copy "${cleanPath}"`
     );
 
-    const creationDate = date || new Date().toISOString().replace('T', ' ').substring(0, 19);
-    const tzOffset = '-04:00';
-    const exifDate = creationDate.replace(/[-T]/g, ':').replace(' ', ':');
+    // Step 2: Write Apple QuickTime keys with exiftool-vendored
+    const creationDate = date
+      ? new Date(date.replace(' ', 'T')).toISOString()
+      : new Date().toISOString();
 
-    let gpsCmd = '';
+    const tags = {
+      'Keys:Make': 'Apple',
+      'Keys:Model': profile.model,
+      'Keys:Software': profile.software,
+      'Keys:CreationDate': creationDate,
+      CreateDate: creationDate,
+      ModifyDate: creationDate,
+      TrackCreateDate: creationDate,
+      TrackModifyDate: creationDate,
+      MediaCreateDate: creationDate,
+      MediaModifyDate: creationDate,
+    };
+
     if (lat && lon) {
-      const a = alt || '10.000';
-      const latStr = parseFloat(lat) >= 0 ? `+${parseFloat(lat).toFixed(4)}` : `${parseFloat(lat).toFixed(4)}`;
-      const lonStr = parseFloat(lon) >= 0 ? `+${parseFloat(lon).toFixed(4)}` : `${parseFloat(lon).toFixed(4)}`;
-      const altStr = `+${parseFloat(a).toFixed(3)}`;
-      gpsCmd = ` "-Keys:GPSCoordinates=${latStr}${lonStr}${altStr}/"`;
+      const a = parseFloat(alt) || 10;
+      const latN = parseFloat(lat);
+      const lonN = parseFloat(lon);
+      const latStr = latN >= 0 ? `+${latN.toFixed(4)}` : `${latN.toFixed(4)}`;
+      const lonStr = lonN >= 0 ? `+${lonN.toFixed(4)}` : `${lonN.toFixed(4)}`;
+      tags['Keys:GPSCoordinates'] = `${latStr}${lonStr}+${a.toFixed(3)}/`;
     }
 
-    await runCmd(
-      `exiftool -overwrite_original \
-        -Keys:Make="Apple" \
-        -Keys:Model="${profile.model}" \
-        -Keys:Software="${profile.software}" \
-        -Keys:CreationDate="${exifDate}${tzOffset}" \
-        ${gpsCmd} \
-        -CreateDate="${exifDate}" \
-        -ModifyDate="${exifDate}" \
-        -TrackCreateDate="${exifDate}" \
-        -TrackModifyDate="${exifDate}" \
-        -MediaCreateDate="${exifDate}" \
-        -MediaModifyDate="${exifDate}" \
-        "${cleanPath}"`
-    );
+    await exiftool.write(cleanPath, tags, ['-overwrite_original']);
 
+    // Step 3: Rewrite container with FFmpeg
     await runCmd(
       `ffmpeg -y -i "${cleanPath}" -c copy \
         -movflags use_metadata_tags \
@@ -110,4 +113,5 @@ app.post('/process', upload.single('video'), async (req, res) => {
   }
 });
 
+process.on('exit', () => exiftool.end());
 app.listen(PORT, () => console.log(`iPhone Meta Tagger running on port ${PORT}`));
